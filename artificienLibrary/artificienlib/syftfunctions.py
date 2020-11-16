@@ -1,13 +1,35 @@
 from artificienlib.constants import *
 
+import syft as sy
+from syft.serde import protobuf
+from syft_proto.execution.v1.plan_pb2 import Plan as PlanPB
+from syft_proto.execution.v1.state_pb2 import State as StatePB
+from syft.grid.clients.model_centric_fl_client import ModelCentricFLClient
+from syft.execution.state import State
+from syft.execution.placeholder import PlaceHolder
+from syft.execution.translation import TranslationTarget
+
+import torch as th
+from torch import nn
+
+import os
+from websocket import create_connection
+import websockets
+import json
+import requests
+
+sy.make_hook(globals())
+hook.local_worker.framework = None # force protobuf serialization for tensors
+th.random.manual_seed(1)
+
 #define some standard loss functions
 
 #MSE loss
 def mse_with_logits(logits, targets, batch_size):
-     """ Calculates mse
+    """ Calculates mse
         Args:
             * logits: (NxC) outputs of dense layer
-            * targets: (NxC) one-hot encoded labels
+            * targets: (NxC) labels
             * batch_size: value of N, temporarily required because Plan cannot trace .shape
     """
     return (logits - targets).sum() / batch_size
@@ -49,63 +71,76 @@ def set_model_params(module, params_list, start_param_idx=0):
     return param_idx
 
 #define a standard training plan. Func is your loss function
-def training_plan(X, y, batch_size, lr, model_params, func):
-    # inject params into model
-    set_model_params(model, model_params)
-
-    # forward pass
-    logits = model.forward(X)
+def def_training_plan(model, **func):
     
-    # loss
-    loss = func(logits, y, batch_size)
+    func['training_plan']
+    @sy.func2plan()
+    def training_plan(X, y, batch_size, lr, model_params):
+        # inject params into model
+        set_model_params(model, model_params)
+
+        # forward pass
+        logits = model.forward(X)
     
-    # backprop
-    loss.backward()
-
-    # step
-    updated_params = [
-        naive_sgd(param, lr=lr)
-        for param in model_params
-    ]
+        # loss
+        loss = softmax_cross_entropy_with_logits(logits, y, batch_size)
     
-    # accuracy
-    pred = th.argmax(logits, dim=1)
-    target = th.argmax(y, dim=1)
-    acc = pred.eq(target).sum().float() / batch_size
+        # backprop
+        loss.backward()
 
-    return (
-        loss,
-        acc,
-        *updated_params
-    )
+        # step
+        updated_params = [
+            naive_sgd(param, lr=lr)
+            for param in model_params
+        ]
+    
+        # accuracy
+        pred = th.argmax(logits, dim=1)
+        target = th.argmax(y, dim=1)
+        acc = pred.eq(target).sum().float() / batch_size
 
-#function to create dummy input parameters to make the trace, build model
-def build_model(model):
+        return (
+            loss,
+            acc,
+            *updated_params
+        )
+    
+    #create dummy input parameters to make the trace, build model
+    
     model_params = [param.data for param in model.parameters()]  # raw tensors instead of nn.Parameter
     X = th.randn(3, 28 * 28)
     y = nn.functional.one_hot(th.tensor([1, 2, 3]), 10)
     lr = th.tensor([0.01])
     batch_size = th.tensor([3.0])
+    
     _ = training_plan.build(X, y, batch_size, lr, model_params, trace_autograd=True)
     
+    return model_params, training_plan
+    
+    
 #define standard averaging plan
-def avg_plan(avg, item, num):
-    new_avg = []
-    for i, param in enumerate(avg):
-        new_avg.append((avg[i] * num + item[i]) / (num + 1))
-    return new_avg
+def def_avg_plan(model_params, func):
+    @sy.func2plan()
+    def avg_plan(avg, item, num):
+        new_avg = []
+        for i, param in enumerate(avg):
+            new_avg.append((avg[i] * num + item[i]) / (num + 1))
+        return new_avg
 
-# Build the Plan
-_ = avg_plan.build(model_params, model_params, th.tensor([1.0]))
+    # Build the Plan
+    _ = avg_plan.build(model_params, model_params, th.tensor([1.0]))
+    
+    return avg_plan
 
 #function to connect to artificien node
 def artificien_connect():
     # PyGrid Node address
     grid = ModelCentricFLClient(id="test", address=gridAddress, secure=False)
     grid.connect() # These name/version you use in worker
+    return grid
 
 #function to send model to node
-def send_model(name, version, batch_size, learning_rate, max_updates):
+def send_model(name, version, batch_size, learning_rate, max_updates, model_params, grid, training_plan, avg_plan):
 
     client_config = {
         "name": name,

@@ -1,0 +1,6 @@
+README.md
+setup.py
+artificienlib.egg-info/PKG-INFO
+artificienlib.egg-info/SOURCES.txt
+artificienlib.egg-info/dependency_links.txt
+artificienlib.egg-info/top_level.txt

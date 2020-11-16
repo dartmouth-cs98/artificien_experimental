@@ -71,39 +71,53 @@ def set_model_params(module, params_list, start_param_idx=0):
     return param_idx
 
 #define a standard training plan. Func is your loss function
-def def_training_plan(model, **func):
+def def_training_plan(model, dict = {}):
     
-    func['training_plan']
-    @sy.func2plan()
-    def training_plan(X, y, batch_size, lr, model_params):
-        # inject params into model
-        set_model_params(model, model_params)
+    if 'loss' in dict:
+        loss_func = dict['loss']
+    else:
+        loss_func = softmax_cross_entropy_with_logits
+    
+    if 'optimizer' in dict:
+        optim_func = dict['optimizer']
+    else:
+        optim_func = naive_sgd
+        
+    if 'training_plan' in dict:
+        @sy.func2plan()
+        def training_plan(X, y, batch_size, lr, model_params):
+            dict['training_plan'](X, y, batch_size, lr, model_params)
+    else:
+        @sy.func2plan()
+        def training_plan(X, y, batch_size, lr, model_params):
+            # inject params into model
+            set_model_params(model, model_params)
 
-        # forward pass
-        logits = model.forward(X)
+            # forward pass
+            logits = model.forward(X)
     
-        # loss
-        loss = softmax_cross_entropy_with_logits(logits, y, batch_size)
+            # loss
+            loss = loss_func(logits, y, batch_size)
     
-        # backprop
-        loss.backward()
+            # backprop
+            loss.backward()
 
-        # step
-        updated_params = [
-            naive_sgd(param, lr=lr)
-            for param in model_params
-        ]
+            # step
+            updated_params = [
+                optim_func(param, lr=lr)
+                for param in model_params
+            ]
     
-        # accuracy
-        pred = th.argmax(logits, dim=1)
-        target = th.argmax(y, dim=1)
-        acc = pred.eq(target).sum().float() / batch_size
+            # accuracy
+            pred = th.argmax(logits, dim=1)
+            target = th.argmax(y, dim=1)
+            acc = pred.eq(target).sum().float() / batch_size
 
-        return (
-            loss,
-            acc,
-            *updated_params
-        )
+            return (
+                loss,
+                acc,
+                *updated_params
+            )
     
     #create dummy input parameters to make the trace, build model
     
@@ -119,13 +133,18 @@ def def_training_plan(model, **func):
     
     
 #define standard averaging plan
-def def_avg_plan(model_params, func):
-    @sy.func2plan()
-    def avg_plan(avg, item, num):
-        new_avg = []
-        for i, param in enumerate(avg):
-            new_avg.append((avg[i] * num + item[i]) / (num + 1))
-        return new_avg
+def def_avg_plan(model_params, func = None):
+    if func is not None:
+        @sy.func2plan()
+        def avg_plan(avg, item, num):
+            func(avg, item, num)
+    else:
+        @sy.func2plan()
+        def avg_plan(avg, item, num):
+            new_avg = []
+            for i, param in enumerate(avg):
+                new_avg.append((avg[i] * num + item[i]) / (num + 1))
+            return new_avg
 
     # Build the Plan
     _ = avg_plan.build(model_params, model_params, th.tensor([1.0]))

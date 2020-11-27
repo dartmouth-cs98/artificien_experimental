@@ -47,7 +47,10 @@ def test_mse():
 
 def test_2_node():
     
-    model_params, training_plan = syftfunctions.def_training_plan(model)
+    X = th.randn(3, 28 * 28)
+    y = nn.functional.one_hot(th.tensor([1, 2, 3]), 10)
+    
+    model_params, training_plan = syftfunctions.def_training_plan(model, X, y)
 
     avg_plan = syftfunctions.def_avg_plan(model_params)
 
@@ -55,7 +58,7 @@ def test_2_node():
 
     syftfunctions.send_model(name="lib_test", version="0.1.0", batch_size=2, learning_rate=0.2, max_updates=10, model_params=model_params, grid=grid, training_plan=training_plan, avg_plan=avg_plan)
     
-    assert true
+    assert True
 
 
 

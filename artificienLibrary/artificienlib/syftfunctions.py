@@ -9,6 +9,9 @@ from syft.execution.state import State
 from syft.execution.placeholder import PlaceHolder
 from syft.execution.translation import TranslationTarget
 
+from datetime import date
+import boto3
+
 import torch as th
 from torch import nn
 
@@ -34,7 +37,7 @@ def mse_with_logits(logits, targets, batch_size):
     """
     return (logits - targets).sum() / batch_size
 
-#softmax cross entropy lopp
+#softmax cross entropy loss
 def softmax_cross_entropy_with_logits(logits, targets, batch_size):
     """ Calculates softmax entropy
         Args:
@@ -71,7 +74,7 @@ def set_model_params(module, params_list, start_param_idx=0):
     return param_idx
 
 #define a standard training plan. Func is your loss function
-def def_training_plan(model, dict = {}):
+def def_training_plan(model, X, y, dict = {}):
     
     if 'loss' in dict:
         loss_func = dict['loss']
@@ -122,8 +125,17 @@ def def_training_plan(model, dict = {}):
     #create dummy input parameters to make the trace, build model
     
     model_params = [param.data for param in model.parameters()]  # raw tensors instead of nn.Parameter
-    X = th.randn(3, 28 * 28)
-    y = nn.functional.one_hot(th.tensor([1, 2, 3]), 10)
+    
+    #figure out model dimensions
+    #i_o = [param.nelement() for param in model.parameters()]
+    #y_size = i_o[len(i_o)-1]
+    #if (len(i_o) > 2):
+    #    x_size = i_o[0]/i_o[1]
+    #else:
+    #    x_size = i_o[0]
+    
+    #X = th.randn(3, int(x_size))
+    #y = nn.functional.one_hot(th.tensor([1, 2, 3]), y_size)
     lr = th.tensor([0.01])
     batch_size = th.tensor([3.0])
     
@@ -156,6 +168,7 @@ def artificien_connect():
     # PyGrid Node address
     grid = ModelCentricFLClient(id="test", address=gridAddress, secure=False)
     grid.connect() # These name/version you use in worker
+    
     return grid
 
 #function to send model to node
@@ -171,7 +184,6 @@ def send_model(name, version, batch_size, learning_rate, max_updates, model_para
 
     server_config = {
         "min_workers": 5,
-
         "max_workers": 5,
         "pool_selection": "random",
         "do_not_reuse_workers_until_cycle": 6,
@@ -197,6 +209,20 @@ def send_model(name, version, batch_size, learning_rate, max_updates, model_para
         server_averaging_plan=avg_plan,
         client_config=client_config,
         server_config=server_config
+    )
+    
+    dynamodb = boto3.resource('dynamodb', region_name=region_name)
+    table = dynamodb.Table('model_table')
+    
+    response_db = table.put_item(
+        Item = {
+            'model_id':name,
+            'active_status':1,
+            'version':version,
+            'date_submitted':date.today(),
+            'owner_name':os.environ['JUPYTERHUB_USER'],
+            'percent_complete': 42
+        }
     )
     
     return print("Host response:", response)

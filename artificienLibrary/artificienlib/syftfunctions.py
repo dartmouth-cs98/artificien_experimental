@@ -1,4 +1,4 @@
-from artificienlib.constants import *
+from .constants import *
 
 import syft as sy
 from syft.serde import protobuf
@@ -25,9 +25,8 @@ sy.make_hook(globals())
 hook.local_worker.framework = None # force protobuf serialization for tensors
 th.random.manual_seed(1)
 
-#define some standard loss functions
+# Define some standard loss functions
 
-#MSE loss
 def mse_with_logits(logits, targets, batch_size):
     """ Calculates mse
         Args:
@@ -37,7 +36,7 @@ def mse_with_logits(logits, targets, batch_size):
     """
     return (logits - targets).sum() / batch_size
 
-#softmax cross entropy loss
+
 def softmax_cross_entropy_with_logits(logits, targets, batch_size):
     """ Calculates softmax entropy
         Args:
@@ -51,16 +50,16 @@ def softmax_cross_entropy_with_logits(logits, targets, batch_size):
     # NLL, reduction = mean
     return -(targets * log_probs).sum() / batch_size
 
-#define standard optimizers
 
-#standard gradient descent
+# Define standard optimizers
 def naive_sgd(param, **kwargs):
+    """ Naive Standard Gradient Descent"""
     return param - kwargs['lr'] * param.grad
 
-#standard function will set tensors as model parametes
+
+# Standard function will set tensors as model parameters
 def set_model_params(module, params_list, start_param_idx=0):
-    """ Set params list into model recursively
-    """
+    """ Set params list into model recursively """
     param_idx = start_param_idx
 
     for name, param in module._parameters.items():
@@ -73,23 +72,33 @@ def set_model_params(module, params_list, start_param_idx=0):
 
     return param_idx
 
-#define a standard training plan. Func is your loss function
-def def_training_plan(model, X, y, dict = {}):
-    
-    if 'loss' in dict:
-        loss_func = dict['loss']
+
+def def_training_plan(model, X, y, plan_dict=None):
+
+    """
+    :param model: A model built in pytorch
+    :param X: Input data
+    :param y: Labels
+    :param plan_dict: A dictionary representing attributes of the training plan. Values are set to defaults if not set.
+    :return: Model parameters and a training plan to be used with pysyft functions
+    """
+
+    if plan_dict is None:
+        plan_dict = {}
+    if 'loss' in plan_dict:
+        loss_func = plan_dict['loss']
     else:
         loss_func = softmax_cross_entropy_with_logits
     
-    if 'optimizer' in dict:
-        optim_func = dict['optimizer']
+    if 'optimizer' in plan_dict:
+        optim_func = plan_dict['optimizer']
     else:
         optim_func = naive_sgd
         
-    if 'training_plan' in dict:
+    if 'training_plan' in plan_dict:
         @sy.func2plan()
         def training_plan(X, y, batch_size, lr, model_params):
-            dict['training_plan'](X, y, batch_size, lr, model_params)
+            plan_dict['training_plan'](X, y, batch_size, lr, model_params)
     else:
         @sy.func2plan()
         def training_plan(X, y, batch_size, lr, model_params):
@@ -122,30 +131,18 @@ def def_training_plan(model, X, y, dict = {}):
                 *updated_params
             )
     
-    #create dummy input parameters to make the trace, build model
-    
+    # Create dummy input parameters to make the trace, build model
     model_params = [param.data for param in model.parameters()]  # raw tensors instead of nn.Parameter
-    
-    #figure out model dimensions
-    #i_o = [param.nelement() for param in model.parameters()]
-    #y_size = i_o[len(i_o)-1]
-    #if (len(i_o) > 2):
-    #    x_size = i_o[0]/i_o[1]
-    #else:
-    #    x_size = i_o[0]
-    
-    #X = th.randn(3, int(x_size))
-    #y = nn.functional.one_hot(th.tensor([1, 2, 3]), y_size)
     lr = th.tensor([0.01])
     batch_size = th.tensor([3.0])
     
     _ = training_plan.build(X, y, batch_size, lr, model_params, trace_autograd=True)
     
     return model_params, training_plan
-    
-    
-#define standard averaging plan
-def def_avg_plan(model_params, func = None):
+
+
+# Define standard averaging plan
+def def_avg_plan(model_params, func=None):
     if func is not None:
         @sy.func2plan()
         def avg_plan(avg, item, num):
@@ -163,16 +160,21 @@ def def_avg_plan(model_params, func = None):
     
     return avg_plan
 
-#function to connect to artificien node
+
 def artificien_connect():
+    """ Function to connect to artificien PyGrid node """
     # PyGrid Node address
     grid = ModelCentricFLClient(id="test", address=gridAddress, secure=False)
     grid.connect() # These name/version you use in worker
     
     return grid
 
-#function to send model to node
+
 def send_model(name, version, batch_size, learning_rate, max_updates, model_params, grid, training_plan, avg_plan):
+    """ Function to send model to node """
+
+    # Add username to the model name so as to avoid conflicts across users
+    name = name + '-' + os.environ['JUPYTERHUB_USER']
 
     client_config = {
         "name": name,
@@ -215,27 +217,28 @@ def send_model(name, version, batch_size, learning_rate, max_updates, model_para
     table = dynamodb.Table('model_table')
     
     response_db = table.put_item(
-        Item = {
-            'model_id':name,
-            'active_status':1,
-            'version':version,
-            'date_submitted':date.today(),
-            'owner_name':os.environ['JUPYTERHUB_USER'],
+        Item={
+            'model_id': name,
+            'active_status': 1,
+            'version': version,
+            'date_submitted': str(date.today()),
+            'owner_name': str(os.environ['JUPYTERHUB_USER']),
             'percent_complete': 42
         }
     )
     
     return print("Host response:", response)
 
-# Helper function to make WS requests
-    
+
 def sendWsMessage(data):
+    """ Helper function to make WS requests """
 
     ws = create_connection('ws://' + gridAddress)
 
     ws.send(json.dumps(data))
     message = ws.recv()
     return json.loads(message)
+
 
 def check_hosted_model(name, version):
     

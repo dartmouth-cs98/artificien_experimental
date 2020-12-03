@@ -1,4 +1,4 @@
-from .constants import *
+from .constants import gridAddress, region_name
 
 import syft as sy
 from syft.serde import protobuf
@@ -22,11 +22,11 @@ import json
 import requests
 
 sy.make_hook(globals())
-hook.local_worker.framework = None # force protobuf serialization for tensors
+hook.local_worker.framework = None  # force protobuf serialization for tensors
 th.random.manual_seed(1)
 
-# Define some standard loss functions
 
+# Define some standard loss functions
 def mse_with_logits(logits, targets, batch_size):
     """ Calculates mse
         Args:
@@ -79,7 +79,8 @@ def def_training_plan(model, X, y, plan_dict=None):
     :param model: A model built in pytorch
     :param X: Input data
     :param y: Labels
-    :param plan_dict: A dictionary representing attributes of the training plan. Values are set to defaults if not set.
+    :param plan_dict: A dictionary representing attributes of the training plan. 
+                      Values are set to defaults if not set.
     :return: Model parameters and a training plan to be used with pysyft functions
     """
 
@@ -165,12 +166,13 @@ def artificien_connect():
     """ Function to connect to artificien PyGrid node """
     # PyGrid Node address
     grid = ModelCentricFLClient(id="test", address=gridAddress, secure=False)
-    grid.connect() # These name/version you use in worker
+    grid.connect()  # These name/version you use in worker
     
     return grid
 
 
-def send_model(name, version, batch_size, learning_rate, max_updates, model_params, grid, training_plan, avg_plan):
+def send_model(name, version, batch_size, learning_rate, max_updates, 
+               attribute_predicted, model_params, grid, training_plan, avg_plan):
     """ Function to send model to node """
 
     # Add username to the model name so as to avoid conflicts across users
@@ -216,13 +218,14 @@ def send_model(name, version, batch_size, learning_rate, max_updates, model_para
     dynamodb = boto3.resource('dynamodb', region_name=region_name)
     table = dynamodb.Table('model_table')
     
-    response_db = table.put_item(
+    table.put_item(
         Item={
             'model_id': name,
             'active_status': 1,
             'version': version,
             'dataset': 'mnist',
             'date_submitted': str(date.today()),
+            'attribute_predicted': attribute_predicted,
             'owner_name': str(os.environ['JUPYTERHUB_USER']),
             'percent_complete': 42,
             'node_URL': 'http://pygri-pygri-frtwp3inl2zq-2ea21a767266378c.elb.us-east-1.amazonaws.com:5000'

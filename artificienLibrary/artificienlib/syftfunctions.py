@@ -221,9 +221,11 @@ def send_model(name, version, batch_size, learning_rate, max_updates, model_para
             'model_id': name,
             'active_status': 1,
             'version': version,
+            'dataset': 'mnist',
             'date_submitted': str(date.today()),
             'owner_name': str(os.environ['JUPYTERHUB_USER']),
-            'percent_complete': 42
+            'percent_complete': 42,
+            'node_URL': 'http://pygri-pygri-frtwp3inl2zq-2ea21a767266378c.elb.us-east-1.amazonaws.com:5000'
         }
     )
     

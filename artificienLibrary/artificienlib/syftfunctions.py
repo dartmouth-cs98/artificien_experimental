@@ -1,4 +1,4 @@
-from .constants import *
+from .constants import gridAddress, region_name
 
 import syft as sy
 from syft.serde import protobuf
@@ -22,11 +22,11 @@ import json
 import requests
 
 sy.make_hook(globals())
-hook.local_worker.framework = None # force protobuf serialization for tensors
+hook.local_worker.framework = None  # force protobuf serialization for tensors
 th.random.manual_seed(1)
 
-# Define some standard loss functions
 
+# Define some standard loss functions
 def mse_with_logits(logits, targets, batch_size):
     """ Calculates mse
         Args:
@@ -136,7 +136,7 @@ def def_training_plan(model, X, y, plan_dict=None):
     lr = th.tensor([0.01])
     batch_size = th.tensor([3.0])
     
-    _ = training_plan.build(X, y, batch_size, lr, model_params, trace_autograd=True)
+    training_plan.build(X, y, batch_size, lr, model_params, trace_autograd=True)
     
     return model_params, training_plan
 
@@ -156,7 +156,7 @@ def def_avg_plan(model_params, func=None):
             return new_avg
 
     # Build the Plan
-    _ = avg_plan.build(model_params, model_params, th.tensor([1.0]))
+    avg_plan.build(model_params, model_params, th.tensor([1.0]))
     
     return avg_plan
 
@@ -165,7 +165,7 @@ def artificien_connect():
     """ Function to connect to artificien PyGrid node """
     # PyGrid Node address
     grid = ModelCentricFLClient(id="test", address=gridAddress, secure=False)
-    grid.connect() # These name/version you use in worker
+    grid.connect()  # These name/version you use in worker
     
     return grid
 
@@ -216,7 +216,7 @@ def send_model(name, version, batch_size, learning_rate, max_updates, model_para
     dynamodb = boto3.resource('dynamodb', region_name=region_name)
     table = dynamodb.Table('model_table')
     
-    response_db = table.put_item(
+    table.put_item(
         Item={
             'model_id': name,
             'active_status': 1,

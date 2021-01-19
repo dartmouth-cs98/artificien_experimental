@@ -50,12 +50,30 @@ def softmax_cross_entropy_with_logits(logits, targets, batch_size):
     # NLL, reduction = mean
     return -(targets * log_probs).sum() / batch_size
 
+def absolute_error(logits, targets, batch_size):
+    """ Calculates absolute error
+        Args:
+            * logits: (NxC) outputs of dense layer
+            * targets: (NxC) one-hot encoded labels
+            * batch_size: value of N, temporarily required because Plan cannot trace .shape
+    """
+    return abs(logits - targets) / batch_size
+
+def binary_cross_entropy(logits, targets, batch_size):
+    """ Calculates binary cross entropy lose
+        Args:
+            * logits: (NxC) outputs of dense layer
+            * targets: (NxC) one-hot encoded labels
+            * batch_size: value of N, temporarily required because Plan cannot trace .shape
+    """
+    sum_score = (logits * targets.sum(dim=1, keepdim=True).log()).sum()
+    mean_sum_score = sum_score / batch_size
+    return -mean_sum_score
 
 # Define standard optimizers
 def naive_sgd(param, **kwargs):
     """ Naive Standard Gradient Descent"""
     return param - kwargs['lr'] * param.grad
-
 
 # Standard function will set tensors as model parameters
 def set_model_params(module, params_list, start_param_idx=0):

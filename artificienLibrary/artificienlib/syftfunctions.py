@@ -25,8 +25,48 @@ sy.make_hook(globals())
 hook.local_worker.framework = None  # force protobuf serialization for tensors
 th.random.manual_seed(1)
 
-
 # Define some standard loss functions
+
+
+def get_my_purchased_datasets():
+    """ Returns the datasets the user has purchased access to
+        Args:
+            * username: current user's username (duh)
+    """
+    dynamodb = boto3.client('dynamodb')
+
+    # unclear if this is exactly what we need?? What does this return?
+    user_id = str(os.environ['JUPYTERHUB_USER'])
+
+    # response = dynamodb.query(
+    #     TableName='user_table',
+    #     IndexName='users_username_index',
+    #     ExpressionAttributeValues={
+    #         ':v1': {
+    #             'S': username,
+    #         }
+    #     },
+    #     KeyConditionExpression='username = :v1',
+    # )
+
+    response = dynamodb.get_item(
+        TableName='user_table',
+        Key={
+            'user_id': {'S': user_id}
+        },
+        AttributesToGet=[
+            'datasets_purchased',
+        ],
+    )
+    try:
+        for dataset in response['Item']['datasets_purchased']['L']:
+            print(dataset['S'])
+        return
+    except:
+        print('No datasets purchased')
+        return
+
+
 def mse_with_logits(logits, targets, batch_size):
     """ Calculates mse
         Args:
@@ -50,6 +90,7 @@ def softmax_cross_entropy_with_logits(logits, targets, batch_size):
     # NLL, reduction = mean
     return -(targets * log_probs).sum() / batch_size
 
+
 def absolute_error(logits, targets, batch_size):
     """ Calculates absolute error
         Args:
@@ -58,6 +99,7 @@ def absolute_error(logits, targets, batch_size):
             * batch_size: value of N, temporarily required because Plan cannot trace .shape
     """
     return abs(logits - targets) / batch_size
+
 
 def binary_cross_entropy(logits, targets, batch_size):
     """ Calculates binary cross entropy lose
@@ -71,11 +113,15 @@ def binary_cross_entropy(logits, targets, batch_size):
     return -mean_sum_score
 
 # Define standard optimizers
+
+
 def naive_sgd(param, **kwargs):
     """ Naive Standard Gradient Descent"""
     return param - kwargs['lr'] * param.grad
 
 # Standard function will set tensors as model parameters
+
+
 def set_model_params(module, params_list, start_param_idx=0):
     """ Set params list into model recursively """
     param_idx = start_param_idx
@@ -92,7 +138,6 @@ def set_model_params(module, params_list, start_param_idx=0):
 
 
 def def_training_plan(model, X, y, plan_dict=None):
-
     """
     :param model: A model built in pytorch
     :param X: Input data
@@ -107,12 +152,12 @@ def def_training_plan(model, X, y, plan_dict=None):
         loss_func = plan_dict['loss']
     else:
         loss_func = softmax_cross_entropy_with_logits
-    
+
     if 'optimizer' in plan_dict:
         optim_func = plan_dict['optimizer']
     else:
         optim_func = naive_sgd
-        
+
     if 'training_plan' in plan_dict:
         @sy.func2plan()
         def training_plan(X, y, batch_size, lr, model_params):
@@ -125,10 +170,10 @@ def def_training_plan(model, X, y, plan_dict=None):
 
             # forward pass
             logits = model.forward(X)
-    
+
             # loss
             loss = loss_func(logits, y, batch_size)
-    
+
             # backprop
             loss.backward()
 
@@ -137,7 +182,7 @@ def def_training_plan(model, X, y, plan_dict=None):
                 optim_func(param, lr=lr)
                 for param in model_params
             ]
-    
+
             # accuracy
             pred = th.argmax(logits, dim=1)
             target = th.argmax(y, dim=1)
@@ -148,14 +193,16 @@ def def_training_plan(model, X, y, plan_dict=None):
                 acc,
                 *updated_params
             )
-    
+
     # Create dummy input parameters to make the trace, build model
-    model_params = [param.data for param in model.parameters()]  # raw tensors instead of nn.Parameter
+    # raw tensors instead of nn.Parameter
+    model_params = [param.data for param in model.parameters()]
     lr = th.tensor([0.01])
     batch_size = th.tensor([3.0])
-    
-    training_plan.build(X, y, batch_size, lr, model_params, trace_autograd=True)
-    
+
+    training_plan.build(X, y, batch_size, lr,
+                        model_params, trace_autograd=True)
+
     return model_params, training_plan
 
 
@@ -175,7 +222,7 @@ def def_avg_plan(model_params, func=None):
 
     # Build the Plan
     avg_plan.build(model_params, model_params, th.tensor([1.0]))
-    
+
     return avg_plan
 
 
@@ -184,7 +231,7 @@ def artificien_connect():
     # PyGrid Node address
     grid = ModelCentricFLClient(id="test", address=gridAddress, secure=False)
     grid.connect()  # These name/version you use in worker
-    
+
     return grid
 
 
@@ -199,7 +246,8 @@ def send_model(name, version, batch_size, learning_rate, max_updates, model_para
         "version": version,
         "batch_size": batch_size,
         "lr": learning_rate,
-        "max_updates": max_updates  # custom syft.js option that limits number of training loops per worker
+        # custom syft.js option that limits number of training loops per worker
+        "max_updates": max_updates
     }
 
     server_config = {
@@ -230,10 +278,10 @@ def send_model(name, version, batch_size, learning_rate, max_updates, model_para
         client_config=client_config,
         server_config=server_config
     )
-    
+
     dynamodb = boto3.resource('dynamodb', region_name=region_name)
     table = dynamodb.Table('model_table')
-    
+
     table.put_item(
         Item={
             'model_id': name,
@@ -246,7 +294,7 @@ def send_model(name, version, batch_size, learning_rate, max_updates, model_para
             'node_URL': 'http://' + gridAddress
         }
     )
-    
+
     return print("Host response:", response)
 
 
@@ -261,13 +309,13 @@ def sendWsMessage(data):
 
 
 def check_hosted_model(name, version):
-    
+
     cycle_request = {
         "type": "model-centric/cycle-request",
         "data": {
             "worker_id": auth_response['data']['worker_id'],
             "model": name,
-        
+
             "version": version,
             "ping": 1,
             "download": 10000,
@@ -279,35 +327,41 @@ def check_hosted_model(name, version):
 
     worker_id = auth_response['data']['worker_id']
     request_key = cycle_response['data']['request_key']
-    model_id = cycle_response['data']['model_id'] 
+    model_id = cycle_response['data']['model_id']
     training_plan_id = cycle_response['data']['plans']['training_plan']
-    
+
     # Model
-    req = requests.get(f"http://{gridAddress}/model-centric/get-model?worker_id={worker_id}&request_key={request_key}&model_id={model_id}")
+    req = requests.get(
+        f"http://{gridAddress}/model-centric/get-model?worker_id={worker_id}&request_key={request_key}&model_id={model_id}")
     model_data = req.content
     pb = StatePB()
     pb.ParseFromString(req.content)
-    model_params_downloaded = protobuf.serde._unbufferize(hook.local_worker, pb)
-    print("Params shapes:", [p.shape for p in model_params_downloaded.tensors()])
-    
+    model_params_downloaded = protobuf.serde._unbufferize(
+        hook.local_worker, pb)
+    print("Params shapes:", [
+          p.shape for p in model_params_downloaded.tensors()])
+
     # Plan "list of ops"
-    req = requests.get(f"http://{gridAddress}/model-centric/get-plan?worker_id={worker_id}&request_key={request_key}&plan_id={training_plan_id}&receive_operations_as=list")
+    req = requests.get(
+        f"http://{gridAddress}/model-centric/get-plan?worker_id={worker_id}&request_key={request_key}&plan_id={training_plan_id}&receive_operations_as=list")
     pb = PlanPB()
     pb.ParseFromString(req.content)
     plan_ops = protobuf.serde._unbufferize(hook.local_worker, pb)
     print(plan_ops.code)
     print(plan_ops.torchscript)
-    
+
     # Plan "torchscript"
-    req = requests.get(f"http://{gridAddress}/model-centric/get-plan?worker_id={worker_id}&request_key={request_key}&plan_id={training_plan_id}&receive_operations_as=torchscript")
+    req = requests.get(
+        f"http://{gridAddress}/model-centric/get-plan?worker_id={worker_id}&request_key={request_key}&plan_id={training_plan_id}&receive_operations_as=torchscript")
     pb = PlanPB()
     pb.ParseFromString(req.content)
     plan_ts = protobuf.serde._unbufferize(hook.local_worker, pb)
     print(plan_ts.code)
     print(plan_ts.torchscript.code)
-    
+
     # Plan "tfjs"
-    req = requests.get(f"http://{gridAddress}/model-centric/get-plan?worker_id={worker_id}&request_key={request_key}&plan_id={training_plan_id}&receive_operations_as=tfjs")
+    req = requests.get(
+        f"http://{gridAddress}/model-centric/get-plan?worker_id={worker_id}&request_key={request_key}&plan_id={training_plan_id}&receive_operations_as=tfjs")
     pb = PlanPB()
     pb.ParseFromString(req.content)
     plan_tfjs = protobuf.serde._unbufferize(hook.local_worker, pb)

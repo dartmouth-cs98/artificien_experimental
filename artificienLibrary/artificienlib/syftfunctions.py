@@ -239,6 +239,7 @@ def send_model(name, version, batch_size, learning_rate, max_updates, model_para
     """ Function to send model to node """
 
     # Add username to the model name so as to avoid conflicts across users
+    # currently modelname-username
     name = name + '-' + os.environ['JUPYTERHUB_USER']
 
     client_config = {

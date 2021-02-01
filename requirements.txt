@@ -1,6 +1,5 @@
 aioice==0.6.18
 aiortc==0.9.28
-artificienlib @ file:///tf/notebooks/Artificien/artificien_experimental/artificienLibrary/dist/artificienlib-0.1.0-py3-none-any.whl
 async-generator==1.10
 attrs==20.3.0
 av==8.0.2

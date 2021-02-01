@@ -1,4 +1,4 @@
-from .constants import gridAddress, region_name
+from constants import masterNode, region_name
 
 import syft as sy
 from syft.serde import protobuf
@@ -8,7 +8,7 @@ from syft.grid.clients.model_centric_fl_client import ModelCentricFLClient
 from syft.execution.state import State
 from syft.execution.placeholder import PlaceHolder
 from syft.execution.translation import TranslationTarget
-
+from syft.grid.clients.model_centric_fl_client import ModelCentricFLClient
 from datetime import date
 import boto3
 
@@ -20,11 +20,55 @@ from websocket import create_connection
 import websockets
 import json
 import requests
+import jsonpickle
+import jsonpickle.ext.numpy as jsonpickle_numpy
+jsonpickle_numpy.register_handlers()
+import binascii
+import time
+import requests
+
 
 sy.make_hook(globals())
 hook.local_worker.framework = None  # force protobuf serialization for tensors
 th.random.manual_seed(1)
 
+def get_my_purchased_datasets():
+    """ Returns the datasets the user has purchased access to
+        Args:
+            * username: current user's username (duh)
+    """
+    dynamodb = boto3.client('dynamodb')
+
+    # unclear if this is exactly what we need?? What does this return?
+    user_id = str(os.environ['JUPYTERHUB_USER'])
+
+    # response = dynamodb.query(
+    #     TableName='user_table',
+    #     IndexName='users_username_index',
+    #     ExpressionAttributeValues={
+    #         ':v1': {
+    #             'S': username,
+    #         }
+    #     },
+    #     KeyConditionExpression='username = :v1',
+    # )
+
+    response = dynamodb.get_item(
+        TableName='user_table',
+        Key={
+            'user_id': {'S': user_id}
+        },
+        AttributesToGet=[
+            'datasets_purchased',
+        ],
+    )
+    try:
+        for dataset in response['Item']['datasets_purchased']['L']:
+            print(dataset['S'])
+        return
+    except:
+        print('No datasets purchased')
+        return
 
 # Define some standard loss functions
 def mse_with_logits(logits, targets, batch_size):
@@ -179,20 +223,61 @@ def def_avg_plan(model_params, func=None):
     return avg_plan
 
 
-def artificien_connect():
+def artificien_connect(model_name):
     """ Function to connect to artificien PyGrid node """
+
     # PyGrid Node address
-    grid = ModelCentricFLClient(id="test", address=gridAddress, secure=False)
+    node = {'model_id':model_name}
+    masterNodeAddy = 'http://' + masterNode + '/create'
+    resp = requests.post(masterNodeAddy, json={'model_id':model_name})
+    resp = resp.json()
+    print(resp)
+    while resp['status'] != 'ready':
+        if 'error' in resp:
+            return jsonify({'error': 'failed to connect'}), 600
+        time.sleep(240)
+        resp = requests.post(masterNodeAddy, json=node)
+        print(resp)
+
+    model_table = dynamodb.Table('model_table')
+
+    try:
+        model_response = model_table.query(KeyConditionExpression=Key('model_id').eq(model_name))
+    except:
+        return jsonify({'error': 'failed to query dynamodb'}), 500
+
+    if model_response['Items'] is None:
+        return jsonify({'error': 'model id not found'}), 400
+
+    node_URL = model_response['Items'][0]['node_URL']
+
+    grid = ModelCentricFLClient(id=model_name, address=node_URL, secure=False)
     grid.connect()  # These name/version you use in worker
     
     return grid
 
 
-def send_model(name, version, batch_size, learning_rate, max_updates, model_params, grid, training_plan, avg_plan):
+def send_model(name, version, batch_size, learning_rate, max_updates, model_params, grid, training_plan, avg_plan, data_set):
     """ Function to send model to node """
 
     # Add username to the model name so as to avoid conflicts across users
-    name = name + '-' + os.environ['JUPYTERHUB_USER']
+    name = name + '-' + os.environ['JUPYTERHUB_USER'] + '-' + version + '-' + data_set
+    table = dynamodb.Table('model_table')
+
+    table.put_item(
+        Item={
+            'model_id': name,
+            'active_status': 1,
+            'version': version,
+            'dataset': data_set,
+            'date_submitted': str(date.today()),
+            'owner_name': str(os.environ['JUPYTERHUB_USER']),
+            'percent_complete': 42,
+            'hasNode': False
+        }
+    )
+
+    grid = artificien_connect(name)
 
     client_config = {
         "name": name,
@@ -233,22 +318,8 @@ def send_model(name, version, batch_size, learning_rate, max_updates, model_para
     
     dynamodb = boto3.resource('dynamodb', region_name=region_name)
     table = dynamodb.Table('model_table')
-    
-    table.put_item(
-        Item={
-            'model_id': name,
-            'active_status': 1,
-            'version': version,
-            'dataset': 'mnist',
-            'date_submitted': str(date.today()),
-            'owner_name': str(os.environ['JUPYTERHUB_USER']),
-            'percent_complete': 42,
-            'node_URL': 'http://' + gridAddress
-        }
-    )
-    
-    return print("Host response:", response)
 
+    return print("Host response:", response)
 
 def sendWsMessage(data):
     """ Helper function to make WS requests """
@@ -312,3 +383,43 @@ def check_hosted_model(name, version):
     pb.ParseFromString(req.content)
     plan_tfjs = protobuf.serde._unbufferize(hook.local_worker, pb)
     print(plan_tfjs.code)
+
+
+class LinearRegression(th.nn.Module):
+
+    def __init__(self):
+        super(LinearRegression, self).__init__()
+        self.linear = th.nn.Linear(3, 1)
+
+    def forward(self, x):
+        y_pred = self.linear(x)
+        return y_pred
+
+if __name__ == "__main__":
+    name = "perceptron"
+    model = LinearRegression()
+    X = th.randn(1, 3)
+    y = nn.functional.one_hot(th.tensor([2]))
+    model_params, training_plan = def_training_plan(model, X, y, {"loss": mse_with_logits})
+    avg_plan = def_avg_plan(model_params)
+    grid = artificien_connect(name)
+    #training_plan_pkl = jsonpickle.encode(training_plan)
+    #model_params_pkl = jsonpickle.encode(model_params)
+    #avg_plan_pkl = jsonpickle.encode(avg_plan)
+    #training_plan = jsonpickle.decode(training_plan_pkl)
+    #avg_plan = jsonpickle.decode(avg_plan_pkl)
+    #model_params = jsonpickle.decode(model_params_pkl)
+
+    #training_plan_serial = protobuf.serde._force_full_bufferize(hook.local_worker, training_plan)
+    #model_params_pkl = protobuf.serde._bufferize(hook.local_worker, model_params)
+    #avg_plan_pkl = protobuf.serde._bufferize(hook.local_worker, avg_plan)
+
+    send_model(name=name, version="0.3.0", batch_size=1, learning_rate=0.2, max_updates=10,
+               model_params=model_params, grid=grid, training_plan=training_plan, avg_plan=avg_plan)
+    #plan = {'training_plan':training_plan_pkl, 'model_params':model_params_pkl, 'avg_plan':avg_plan_pkl, 'name':'perceptron', 'version':'1.0', 'batch_size':10,
+    #        'learning_rate':0.1, 'max_updates':10}
+    #resp = requests.post('http://127.0.0.1:5000/send', json=plan)
+
+
+
+

@@ -403,16 +403,5 @@ def check_hosted_model(name, version):
     print(plan_tfjs.code)
 
 
-class LinearRegression(th.nn.Module):
-
-    def __init__(self):
-        super(LinearRegression, self).__init__()
-        self.linear = th.nn.Linear(3, 1)
-
-    def forward(self, x):
-        y_pred = self.linear(x)
-        return y_pred
-
-
 
 

@@ -41,42 +41,31 @@ sy.make_hook(globals())
 hook.local_worker.framework = None  # force protobuf serialization for tensors
 th.random.manual_seed(1)
 
-def get_my_purchased_datasets():
+def get_my_purchased_datasets(password):
     """ Returns the datasets the user has purchased access to
         Args:
             * username: current user's username (duh)
     """
-    dynamodb = boto3.client('dynamodb')
-
-    user_id = str(os.environ['JUPYTERHUB_USER'])
-
-    response = dynamodb.query(
-         TableName='user_table',
-         IndexName='users_username_index',
-         ExpressionAttributeValues={
-             ':v1': {
-                 'S': username,
-             }
-        },
-         KeyConditionExpression='username = :v1',
-    )
-
-    response = dynamodb.get_item(
-        TableName='user_table',
-        Key={
-            'user_id': {'S': user_id}
-        },
-        AttributesToGet=[
-            'datasets_purchased',
-        ],
-    )
+    user_id = os.environ['JUPYTERHUB_USER']
     try:
-        for dataset in response['Item']['datasets_purchased']['L']:
-            print(dataset['S'])
-        return
+        u = Cognito(userPoolId, clientId, username=user_id)
+        u.authenticate(password=password)
     except:
-        print('No datasets purchased')
-        return
+        exit({"Error": "Failed to authenticate User"})
+
+    accessId = u.access_token
+    # PyGrid masterNode address from constants.py
+    masterNodeAddy = 'http://' + masterNode + '/get_datasets'
+
+    # create header with cognito access token and json content specifier
+    headers = CaseInsensitiveDict()
+    headers["Authorization"] = "Bearer " + accessId
+    headers["Content-Type"] = "application/json"
+    node = {"user_id": user_id}
+    resp = requests.post(masterNodeAddy, headers=headers, json=node)
+    resp = resp.json()
+    print(resp)
+    return
 
 # Define some standard loss functions
 def mse_with_logits(logits, targets, batch_size):
@@ -402,6 +391,5 @@ def check_hosted_model(name, version):
     plan_tfjs = protobuf.serde._unbufferize(hook.local_worker, pb)
     print(plan_tfjs.code)
 
-
-
-
+if __name__ == '__main__':
+    get_my_purchased_datasets()

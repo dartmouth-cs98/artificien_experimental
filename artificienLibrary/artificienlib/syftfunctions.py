@@ -1,4 +1,4 @@
-from constants import masterNode, region_name
+from constants import masterNode, region_name, userPoolId, clientId
 
 import syft as sy
 from syft.serde import protobuf
@@ -20,15 +20,19 @@ from websocket import create_connection
 import websockets
 import json
 import requests
+from requests.structures import CaseInsensitiveDict
 import binascii
 import time
 import requests
 import boto3
+from warrant import Cognito
 
 try:
   ecs_client = boto3.client('ecs')
 except BaseException as exe:
     print(exe)
+
+region_name = "us-east-1"
 
 dynamodb = boto3.resource('dynamodb', region_name=region_name)
 
@@ -37,42 +41,31 @@ sy.make_hook(globals())
 hook.local_worker.framework = None  # force protobuf serialization for tensors
 th.random.manual_seed(1)
 
-def get_my_purchased_datasets():
+def get_my_purchased_datasets(password):
     """ Returns the datasets the user has purchased access to
         Args:
             * username: current user's username (duh)
     """
-    dynamodb = boto3.client('dynamodb')
-
-    user_id = str(os.environ['JUPYTERHUB_USER'])
-
-    response = dynamodb.query(
-         TableName='user_table',
-         IndexName='users_username_index',
-         ExpressionAttributeValues={
-             ':v1': {
-                 'S': username,
-             }
-        },
-         KeyConditionExpression='username = :v1',
-    )
-
-    response = dynamodb.get_item(
-        TableName='user_table',
-        Key={
-            'user_id': {'S': user_id}
-        },
-        AttributesToGet=[
-            'datasets_purchased',
-        ],
-    )
+    user_id = os.environ['JUPYTERHUB_USER']
     try:
-        for dataset in response['Item']['datasets_purchased']['L']:
-            print(dataset['S'])
-        return
+        u = Cognito(userPoolId, clientId, username=user_id)
+        u.authenticate(password=password)
     except:
-        print('No datasets purchased')
-        return
+        exit({"Error": "Failed to authenticate User"})
+
+    accessId = u.access_token
+    # PyGrid masterNode address from constants.py
+    masterNodeAddy = 'http://' + masterNode + '/get_datasets'
+
+    # create header with cognito access token and json content specifier
+    headers = CaseInsensitiveDict()
+    headers["Authorization"] = "Bearer " + accessId
+    headers["Content-Type"] = "application/json"
+    node = {"user_id": user_id}
+    resp = requests.post(masterNodeAddy, headers=headers, json=node)
+    resp = resp.json()
+    print(resp)
+    return
 
 # Define some standard loss functions
 def mse_with_logits(logits, targets, batch_size):
@@ -227,44 +220,55 @@ def def_avg_plan(model_params, func=None):
     return avg_plan
 
 
-def artificien_connect(dataset_id, model_id):
+def artificien_connect(dataset_id, model_id, password):
     """ Function to connect to artificien PyGrid node """
+    #api authentication using cognito
+    count = 0
+    try:
+        u = Cognito(userPoolId, clientId, username=os.environ['JUPYTERHUB_USER'])
+        u.authenticate(password=password)
+    except:
+        exit({"Error": "Failed to authenticate User"})
 
-    # PyGrid Node address
-    node = {'dataset_id':dataset_id, 'model_id':model_id}
+    accessId = u.access_token
+    # PyGrid masterNode address from constants.py
     masterNodeAddy = 'http://' + masterNode + '/create'
-    resp = requests.post(masterNodeAddy, json={'dataset_id':dataset_id, 'model_id':model_id})
+
+    # create header with cognito access token and json content specifier
+    headers = CaseInsensitiveDict()
+    headers["Authorization"] = "Bearer " + accessId
+    headers["Content-Type"] = "application/json"
+    node = {"dataset_id": dataset_id, "model_id": model_id}
+    resp = requests.post(masterNodeAddy, headers=headers, json=node)
     resp = resp.json()
-    print(resp.get('status'))
+    print(resp)
+    #print(resp.get('status'))
+    # ping masternode until the ready status is recieved (the node is deployed)
     while resp.get('status') != 'ready':
+        count = count + 1
         if 'error' in resp:
             return {'error': 'failed to connect'}
         time.sleep(30)
         resp = requests.post(masterNodeAddy, json=node)
         resp = resp.json()
-        print(resp)
+        print(resp.get('status'))
 
-    dataset_table = dynamodb.Table('dataset_table')
-    print(model_name)
-    try:
-        dataset_response = dataset_table.query(KeyConditionExpression=Key('dataset_id').eq(dataset_id))
-    except:
-        print({'error': 'failed to query dynamodb'})
-        return {'error': 'failed to query dynamodb'}
+    # grab node url from response
+    nodeURL = resp.get('nodeURL')
+    nodeURL = str(nodeURL) + ':5000'
 
-    if model_response['Items'] is None:
-        print({'error': 'model id not found'})
-        return {'error': 'model id not found'}
+    #if node has just been deployed above, wait a few minutes until it's fully deployed
+    if(count != 0):
+        print("Your model's trainers are waking from a long slumber. This may be a few minutes")
+        time.sleep(180)
 
-    nodeURL = dataset_response['Items'][0]['nodeURL']
-
-    grid = ModelCentricFLClient(id=model_name, address=nodeURL, secure=False)
+    # connect to grid
+    grid = ModelCentricFLClient(id=dataset_id, address=nodeURL, secure=False)
     grid.connect()  # These name/version you use in worker
-    
+    # return grid
     return grid
 
-
-def send_model(name, version, batch_size, learning_rate, max_updates, model_params, grid, training_plan, avg_plan, dataset_id):
+def send_model(name, version, batch_size, learning_rate, max_updates, model_params, training_plan, avg_plan, dataset_id, password):
     """ Function to send model to node """
 
     # Add username to the model name so as to avoid conflicts across users
@@ -283,7 +287,7 @@ def send_model(name, version, batch_size, learning_rate, max_updates, model_para
         }
     )
 
-    grid = artificien_connect(dataset_id, name)
+    grid = artificien_connect(dataset_id, name, password)
 
     client_config = {
         "name": name,
@@ -321,9 +325,6 @@ def send_model(name, version, batch_size, learning_rate, max_updates, model_para
         client_config=client_config,
         server_config=server_config
     )
-    
-    dynamodb = boto3.resource('dynamodb', region_name=region_name)
-    table = dynamodb.Table('model_table')
 
     return print("Host response:", response)
 
@@ -390,31 +391,5 @@ def check_hosted_model(name, version):
     plan_tfjs = protobuf.serde._unbufferize(hook.local_worker, pb)
     print(plan_tfjs.code)
 
-
-class LinearRegression(th.nn.Module):
-
-    def __init__(self):
-        super(LinearRegression, self).__init__()
-        self.linear = th.nn.Linear(3, 1)
-
-    def forward(self, x):
-        y_pred = self.linear(x)
-        return y_pred
-
-if __name__ == "__main__":
-    name = "perceptron"
-    dataset = "dataSetFive"
-    model = LinearRegression()
-    X = th.randn(1, 3)
-    y = nn.functional.one_hot(th.tensor([2]))
-    model_params, training_plan = def_training_plan(model, X, y, {"loss": mse_with_logits})
-    avg_plan = def_avg_plan(model_params)
-    grid = artificien_connect(dataset, name)
-
-    #send_model(name=name, version="0.3.0", batch_size=1, learning_rate=0.2, max_updates=10,
-    #           model_params=model_params, grid=grid, training_plan=training_plan, avg_plan=avg_plan)
-
-
-
-
-
+if __name__ == '__main__':
+    get_my_purchased_datasets()

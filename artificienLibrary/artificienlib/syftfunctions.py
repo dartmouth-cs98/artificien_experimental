@@ -247,7 +247,7 @@ def artificien_connect(dataset_id, model_id, password):
     while resp.get('status') != 'ready':
         count = count + 1
         if 'error' in resp:
-            return {'error': 'failed to connect'}
+            exit({'error': 'failed to connect'})
         time.sleep(30)
         resp = requests.post(masterNodeAddy, json=node)
         resp = resp.json()

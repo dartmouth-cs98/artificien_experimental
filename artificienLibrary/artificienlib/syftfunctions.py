@@ -41,7 +41,7 @@ sy.make_hook(globals())
 hook.local_worker.framework = None  # force protobuf serialization for tensors
 th.random.manual_seed(1)
 
-def get_my_purchased_datasets():
+def get_my_purchased_datasets(password):
     """ Returns the datasets the user has purchased access to
         Args:
             * username: current user's username (duh)
@@ -63,7 +63,6 @@ def get_my_purchased_datasets():
     headers["Content-Type"] = "application/json"
     node = {"user_id": user_id}
     resp = requests.post(masterNodeAddy, headers=headers, json=node)
-    resp = requests.post(masterNodeAddy, json=node)
     resp = resp.json()
     print(resp)
     return
@@ -248,7 +247,7 @@ def artificien_connect(dataset_id, model_id, password):
     while resp.get('status') != 'ready':
         count = count + 1
         if 'error' in resp:
-            return {'error': 'failed to connect'}
+            exit({'error': 'failed to connect'})
         time.sleep(30)
         resp = requests.post(masterNodeAddy, json=node)
         resp = resp.json()

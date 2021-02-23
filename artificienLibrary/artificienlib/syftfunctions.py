@@ -41,7 +41,7 @@ sy.make_hook(globals())
 hook.local_worker.framework = None  # force protobuf serialization for tensors
 th.random.manual_seed(1)
 
-def get_my_purchased_datasets():
+def get_my_purchased_datasets(password):
     """ Returns the datasets the user has purchased access to
         Args:
             * username: current user's username (duh)

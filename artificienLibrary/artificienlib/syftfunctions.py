@@ -41,7 +41,7 @@ sy.make_hook(globals())
 hook.local_worker.framework = None  # force protobuf serialization for tensors
 th.random.manual_seed(1)
 
-def get_my_purchased_datasets(password):
+def get_my_purchased_datasets():
     """ Returns the datasets the user has purchased access to
         Args:
             * username: current user's username (duh)
@@ -63,6 +63,7 @@ def get_my_purchased_datasets(password):
     headers["Content-Type"] = "application/json"
     node = {"user_id": user_id}
     resp = requests.post(masterNodeAddy, headers=headers, json=node)
+    resp = requests.post(masterNodeAddy, json=node)
     resp = resp.json()
     print(resp)
     return
@@ -390,6 +391,3 @@ def check_hosted_model(name, version):
     pb.ParseFromString(req.content)
     plan_tfjs = protobuf.serde._unbufferize(hook.local_worker, pb)
     print(plan_tfjs.code)
-
-if __name__ == '__main__':
-    get_my_purchased_datasets()

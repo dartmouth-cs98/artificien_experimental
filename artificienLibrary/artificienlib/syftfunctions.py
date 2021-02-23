@@ -63,7 +63,6 @@ def get_my_purchased_datasets():
     headers["Content-Type"] = "application/json"
     node = {"user_id": user_id}
     resp = requests.post(masterNodeAddy, headers=headers, json=node)
-    resp = requests.post(masterNodeAddy, json=node)
     resp = resp.json()
     print(resp)
     return

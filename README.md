@@ -2,7 +2,7 @@
 
 This repo stores Jupyter Notebooks used as examples to test the federated learning workflow of the Artificien platform, and the Library we use to implement in JupyterHub.
 
-*Caution Artificien Library has migrated to new repo [artificien_python_library]. Documentation on artificienLibrary here is out of date
+*Caution Artificien Library has migrated to new repo [artificien_python_library](https://github.com/dartmouth-cs98/artificien_python_library). Documentation on artificienLibrary here is out of date*
 * dataSimulation
     * A Jupyter notebook that writes out fake data files
     * Note that a version of this fake data script that is connected with the DynamoDB and writes out CSVs based on Dynamo inputs is in the infra repo. 

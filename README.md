@@ -2,9 +2,7 @@
 
 This repo stores Jupyter Notebooks used as examples to test the federated learning workflow of the Artificien platform, and the Library we use to implement in JupyterHub.
 
-* artificienLibrary
-    * A library to simplify the federated learning process, and to make it easy for a data scientist to build pysyft based models and send them to train on edge devices via artificien infrastructure
-    * A test file that tests the libraries functionality
+*Caution Artificien Library has migrated to new repo [artificien_python_library]. Documentation on artificienLibrary here is out of date
 * dataSimulation
     * A Jupyter notebook that writes out fake data files
     * Note that a version of this fake data script that is connected with the DynamoDB and writes out CSVs based on Dynamo inputs is in the infra repo. 
@@ -73,4 +71,3 @@ This repo stores Jupyter Notebooks used as examples to test the federated learni
 
 * OpenMined Pysyft Tutorials guided the regression buildout
 * OpenMined Pygrid examples 
-* Matt's mom for coming in clutch late in the game

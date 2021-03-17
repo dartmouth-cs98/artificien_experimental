@@ -51,8 +51,8 @@ This repo stores Jupyter Notebooks used as examples to test the federated learni
 
 ## Authors
 
-* Jake Epstein '21 ()
-* Tobias Lange '21
+* Jake Epstein '21 (optimizationModels, deploymentExamples)
+* Tobias Lange '21 (dataSimulation)
 
 ## Acknowledgments
 

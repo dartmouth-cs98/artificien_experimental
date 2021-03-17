@@ -1,0 +1,32 @@
+﻿source,target,weight
+How Artificien Works,Landing,0.4
+How Artificien Works,Exit,0.6
+Landing,How Artificien Works,0.4
+Landing,Marketplace,0.1
+Landing,Profile,0.1
+Landing,My Models,0.1
+Landing,Documentation,0.1
+Landing,Exit,0.2
+Marketplace,Landing,0.1
+Marketplace,My Models,0.2
+Marketplace,Profile,0.2
+Marketplace,Documentation,0.1
+Marketplace,Exit,0.3
+Profile,Marketplace,0.2
+Profile,Landing,0.1
+Profile,My Models,0.3
+Profile,Documentation,0.2
+Profile,Exit,0.2
+Documentation,Profile,0.2
+Documentation,Marketplace,0.2
+Documentation,Landing,0.1
+Documentation,Exit,0.1
+Documentation,My Models,0.4
+My Models,Documentation,0.1
+My Models,Profile,0.1
+My Models,Marketplace,0.1
+My Models,Landing,0.1
+My Models,Exit,0.1
+My Models,Jupyter,0.5
+Jupyter,Exit,0.5
+Jupyter,Send Model,0.5

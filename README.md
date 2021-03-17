@@ -3,13 +3,18 @@
 This repo stores Jupyter Notebooks used as examples to test the federated learning workflow of the Artificien platform.
 
 *Note Artificien Library has migrated to new repo: [artificien_python_library](https://github.com/dartmouth-cs98/artificien_python_library)
+* optimizationModels
+    * Series of experimental optimizers to improve various parts of Artificien's infrastructure
 * dataSimulation
     * A Jupyter notebook that writes out fake data files
     * Note that a version of this fake data script that is connected with the DynamoDB and writes out CSVs based on Dynamo inputs is in the infra repo. 
 * deploymentExamples
    * Jupyter notebooks that show how to define a model for federated learning using pysyft out-of-the-box, using the artificien library, and training a model on the node as a server
 ## Architecture
-
+* optimizationModels
+    * `data_pricing.ipynb` explores how to best price datasets as data has different value based on its use case, and sometimes its profit mazimizing to sell to one buyer over many buyers (hedge fund vs. researcher)
+    * `federated_scheduler.ipynd` looks two questions. Given a bunch of models we can train, how do we decide what to train first and after we've decided on models how do we decide what devices we should train the models on.
+    * `user_graph.ipynb` looks at how to decide when to spin up and down nodes dynamically based on user need
 * dataSimulation
     * Libraries used
         * Python
@@ -28,13 +33,16 @@ This repo stores Jupyter Notebooks used as examples to test the federated learni
 
 
 ## Setup
-
+* optimizationModels
+    * Run jupyter notebooks
 * dataSimulation
     * Ensure Python installation and that you can run Jupyter Notebooks.
 * deploymentExamples
     * Package instalation
         * Inside of artificienLibrary folder run `pip install -r requirements.txt` if you haven't installed the pysyft conda environment already
 ## Deployment
+* optimizationModels
+    * Clone repos, run jupyter notebooks
 * dataSimulation
     * clone the repo, and just run each successive block in fakedatascript.ipynb
 * deploymentExamples
@@ -43,7 +51,7 @@ This repo stores Jupyter Notebooks used as examples to test the federated learni
 
 ## Authors
 
-* Jake Epstein '21
+* Jake Epstein '21 ()
 * Tobias Lange '21
 
 ## Acknowledgments

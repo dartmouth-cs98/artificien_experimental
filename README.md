@@ -2,7 +2,7 @@
 
 This repo stores Jupyter Notebooks used as examples to test the federated learning workflow of the Artificien platform.
 
-*Note Artificien Library has migrated to new repo: [artificien_python_library](https://github.com/dartmouth-cs98/artificien_python_library)
+**Note Artificien Library has migrated to new repo: [artificien_python_library](https://github.com/dartmouth-cs98/artificien_python_library)**
 * optimizationModels
     * Series of experimental optimizers to improve various parts of Artificien's infrastructure
 * dataSimulation

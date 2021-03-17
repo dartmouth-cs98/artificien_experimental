@@ -1,8 +1,8 @@
 # Artificien: Experimental
 
-This repo stores Jupyter Notebooks used as examples to test the federated learning workflow of the Artificien platform, and the Library we use to implement in JupyterHub.
+This repo stores Jupyter Notebooks used as examples to test the federated learning workflow of the Artificien platform.
 
-*Caution Artificien Library has migrated to new repo [artificien_python_library](https://github.com/dartmouth-cs98/artificien_python_library). Documentation on artificienLibrary here is out of date*
+*Note Artificien Library has migrated to new repo: [artificien_python_library](https://github.com/dartmouth-cs98/artificien_python_library)
 * dataSimulation
     * A Jupyter notebook that writes out fake data files
     * Note that a version of this fake data script that is connected with the DynamoDB and writes out CSVs based on Dynamo inputs is in the infra repo. 
@@ -10,15 +10,6 @@ This repo stores Jupyter Notebooks used as examples to test the federated learni
    * Jupyter notebooks that show how to define a model for federated learning using pysyft out-of-the-box, using the artificien library, and training a model on the node as a server
 ## Architecture
 
-* artificienLibrary
-    * Libraries used
-        * `PyGrid` the basis of the wrapper library, the core technology behind PySyft
-        * 'artificienlib' this is the library that it installs to
-        * `pysyft` is the conda environment that contains all the needed packages for the library to run. Requirements can be found in 'requirements.txt'
-    * Code Organization
-        * `syftfunctions.py` is the artificien library - this is the wrapper around PySyft functions, making it easier for data scientists to build robust federated learning capable pytorch based machine learning models. Functional models can be built and sent for training on the pysyft node in under 5 lines of code + normal pysyft model definition
-        * `constants.py` stores authentication protocols for communicating with the node and other pieces of artificien infrastructure
-        * `test_myfunctions.py` is several tests of syftfunctions to ensure the artificien library works as expected
 * dataSimulation
     * Libraries used
         * Python
@@ -38,24 +29,12 @@ This repo stores Jupyter Notebooks used as examples to test the federated learni
 
 ## Setup
 
-* artificienLibrary
-    * Needed Package Installation:
-        * Inside of artificienLibrary folder run `pip install -r requirements.txt`
-    * To test:
-        * Inside of artificienLibrary folder run `python setup.py pytest`
-    * To compile library:
-        * Inside of artificienLibrary folder run `python setup.py bdist_wheel`
 * dataSimulation
     * Ensure Python installation and that you can run Jupyter Notebooks.
 * deploymentExamples
     * Package instalation
         * Inside of artificienLibrary folder run `pip install -r requirements.txt` if you haven't installed the pysyft conda environment already
 ## Deployment
-* artificienLibrary
-    * Run
-        * After completing setup above, from the artificienLibrary folder
-        * Run `pip install dist/artificienlib-0.1.0-py3-none-any.whl`
-        * Now you can simply import the artificien library in python as `import artificienlib`
 * dataSimulation
     * clone the repo, and just run each successive block in fakedatascript.ipynb
 * deploymentExamples
